@@ -95,7 +95,7 @@ def check_length(answer: Answer, question: Question, report: LintReport) -> None
             f"글자수 미달: {actual}자 / 최소 {limit.min}자({mode_label}) — {limit.min - actual}자 더 필요합니다",
             hint="경험의 '어려움'과 '왜 그 방법이 가능했는지'를 보강하면 자연스럽게 늘어납니다",
         ))
-    elif limit.max and actual < limit.max * 0.8:
+    elif limit.max and not limit.min and actual < limit.max * 0.8:
         report.add(Finding(
             "LEN", WARN, question.id,
             f"분량 여유: {actual}자 / 최대 {limit.max}자({mode_label}) — 80% 미만입니다",
