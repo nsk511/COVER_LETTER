@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "jaso"
+version = "0.1.0"
+description = "경력 노트로 회사 맞춤 자기소개서와 면접 준비 자료를 만드는 도구"
+requires-python = ">=3.11"
+dependencies = ["pyyaml>=6.0"]
+
+[project.optional-dependencies]
+llm = ["anthropic>=0.40"]
+
+[project.scripts]
+jaso = "jaso.cli:main"
+
+[tool.setuptools]
+packages = ["jaso"]
+
+[tool.setuptools.package-data]
+jaso = ["data/*.yaml"]

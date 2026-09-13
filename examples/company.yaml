@@ -1,0 +1,60 @@
+# ============================================================
+#  지원 회사 / 직무 / 문항 — 샘플
+#  ※ 가상의 예시입니다. 실제 공고를 보고 그대로 옮겨 적으세요.
+#    특히 문항 원문과 글자수 제한(공백포함/제외)은 공고 그대로여야 합니다.
+# ============================================================
+
+company:
+  name: 가나손해보험
+  position: 상품업무/언더라이팅
+  team: ""                 # 모집부문이 여러 팀이면 비워두고, 소제목을 좁게 쓰지 않는다
+  apply_deadline: 2026-10-15
+
+  # 채용 홈페이지에 적힌 인재상 문구를 그대로 옮깁니다.
+  talent_profile:
+    - 도전하는 사람
+    - 전문성을 갖춘 사람
+    - 신뢰받는 사람
+
+  # 직무기술서(JD)에 적힌 핵심 업무/역량
+  core_competencies:
+    - 상품개발
+    - 요율산출
+    - 언더라이팅
+    - 데이터 분석
+    - 보고서 작성
+
+  keywords: [SQL, 손해율, 담보, 위험률]
+
+  # 회사 관련 사실은 반드시 출처와 함께. checked: true 인 항목만 자소서에 인용합니다.
+  research:
+    - claim: (예시) 2026년 ○○ 안전 캠페인 3회차 시행
+      source: https://example.com/press/2026-campaign
+      date: 2026-08-20
+      checked: false        # 직접 확인한 뒤 true 로 바꾸세요
+    - claim: (예시) 창업 이념 - 예방 중심의 보장
+      source: https://example.com/about
+      date: 2026-09-01
+      checked: false
+
+questions:
+  - id: q1
+    text: 당사에 지원한 동기와 입사 후 이루고 싶은 목표를 기술해 주십시오.
+    type: motivation
+    limit: {min: 700, max: 1000, count_mode: with_space}
+
+  - id: q2
+    text: 본인이 가장 성과를 냈던 경험과 그 과정에서의 역할을 기술해 주십시오.
+    type: achievement
+    limit: {min: 700, max: 1000, count_mode: with_space}
+    use: [exp-rate-agg]      # 쓸 경험을 직접 지정할 수 있습니다
+
+  - id: q3
+    text: 본인의 강점과 보완이 필요한 점을 기술해 주십시오.
+    type: strength_weakness
+    limit: {max: 800, count_mode: with_space}
+
+  - id: q4
+    text: 타인과 협업하여 문제를 해결한 경험을 기술해 주십시오.
+    type: collaboration
+    limit: {max: 800, count_mode: with_space}

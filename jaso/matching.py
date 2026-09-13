@@ -1,0 +1,258 @@
+"""인재상 ↔ 경험 매칭 엔진.
+
+회사가 내건 인재상 문구를 표준 역량축으로 옮기고, 경력 노트의 각 경험이
+그 축을 얼마나 뒷받침하는지 점수화한다. 여기서 나온 순위가 '어느 문항에
+어느 경험을 쓸 것인가'의 근거가 된다.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+
+from .loader import talent_axes
+from .models import CareerNote, CompanyProfile, Experience, Question
+from .textutil import contains_any, strip_spaces
+
+# 문항 유형별로 우선하는 역량축과 경험 필드
+QUESTION_PROFILE: dict[str, dict[str, list[str]]] = {
+    "motivation": {
+        "axes": ["전문성", "고객중심", "도전·혁신"],
+        "fields": ["insight", "result", "role"],
+    },
+    "achievement": {
+        "axes": ["실행력·책임감", "전문성", "데이터·분석", "창의·문제해결"],
+        "fields": ["result", "action", "metrics"],
+    },
+    "challenge": {
+        "axes": ["도전·혁신", "창의·문제해결", "실행력·책임감"],
+        "fields": ["difficulty", "action", "insight"],
+    },
+    "collaboration": {
+        "axes": ["협업·소통", "고객중심", "리더십"],
+        "fields": ["collaboration", "difficulty"],
+    },
+    "strength_weakness": {
+        "axes": ["전문성", "정직·신뢰", "성장·학습"],
+        "fields": ["insight", "lesson", "action"],
+    },
+    "growth": {
+        "axes": ["성장·학습", "전문성"],
+        "fields": ["lesson", "insight"],
+    },
+    "free": {"axes": [], "fields": []},
+}
+
+EXPLICIT_AXIS_BONUS = 4
+METRIC_BONUS = 2
+INSIGHT_BONUS = 2
+FIELD_BONUS = 2
+CORE_COMPETENCY_WEIGHT = 3
+
+
+@dataclass
+class ResolvedAxis:
+    """회사 인재상 문구 한 줄을 표준축으로 해석한 결과."""
+
+    source: str            # 회사가 쓴 원문 (예: "도전하는 프로")
+    axis: str              # 매핑된 표준축 이름 (없으면 source 그대로)
+    signals: list[str] = field(default_factory=list)
+    probes: list[str] = field(default_factory=list)
+    mapped: bool = True    # 사전에서 찾았는지 여부
+
+
+@dataclass
+class ExperienceMatch:
+    """경험 1건이 회사 요구에 얼마나 맞는지."""
+
+    experience: Experience
+    axis_scores: dict[str, int] = field(default_factory=dict)
+    axis_hits: dict[str, list[str]] = field(default_factory=dict)
+    job_fit: int = 0
+    job_hits: list[str] = field(default_factory=list)
+    bonuses: list[str] = field(default_factory=list)
+
+    @property
+    def total(self) -> int:
+        return sum(self.axis_scores.values()) + self.job_fit
+
+    def top_axes(self, limit: int = 3) -> list[tuple[str, int]]:
+        ranked = sorted(self.axis_scores.items(), key=lambda kv: (-kv[1], kv[0]))
+        return [(name, score) for name, score in ranked if score > 0][:limit]
+
+    def evidence(self) -> list[str]:
+        """왜 이 경험이 뽑혔는지 사람이 읽을 수 있는 근거."""
+        reasons = []
+        for name, score in self.top_axes():
+            hits = self.axis_hits.get(name, [])
+            hint = f" ({', '.join(hits[:4])})" if hits else ""
+            reasons.append(f"{name} {score}점{hint}")
+        if self.job_hits:
+            reasons.append(f"직무 키워드: {', '.join(self.job_hits[:4])}")
+        reasons.extend(self.bonuses)
+        return reasons
+
+
+def _tokenize(text: str) -> list[str]:
+    """인재상 문구를 매칭용 토큰으로 쪼갠다."""
+    cleaned = "".join(ch if ch.isalnum() else " " for ch in text)
+    return [tok for tok in cleaned.split() if len(tok) >= 2]
+
+
+def resolve_axes(company: CompanyProfile) -> list[ResolvedAxis]:
+    """회사 인재상 문구들을 표준 역량축으로 변환한다.
+
+    사전에 없는 문구는 버리지 않고, 문구 자체를 축으로 삼아 토큰을 신호로 쓴다.
+    """
+    dictionary = talent_axes()
+    resolved: list[ResolvedAxis] = []
+    seen: set[str] = set()
+
+    for phrase in company.talent_profile:
+        if not phrase:
+            continue
+        flat = strip_spaces(phrase)
+        # 여러 축의 alias 에 걸리면 가장 긴(=구체적인) alias 를 가진 축을 택한다.
+        best: tuple[int, str] | None = None
+        for axis_name, spec in dictionary.items():
+            aliases = [str(a) for a in (spec.get("aliases") or [])] + [axis_name]
+            hits = contains_any(flat, aliases)
+            if not hits:
+                continue
+            strength = max(len(strip_spaces(h)) for h in hits)
+            if best is None or strength > best[0]:
+                best = (strength, axis_name)
+        match_name = best[1] if best else None
+        if match_name:
+            spec = dictionary[match_name]
+            key = match_name
+            if key in seen:
+                # 같은 축에 걸리는 인재상 문구가 둘이면 원문만 덧붙인다.
+                for item in resolved:
+                    if item.axis == key and phrase not in item.source:
+                        item.source = f"{item.source} / {phrase}"
+                continue
+            seen.add(key)
+            resolved.append(ResolvedAxis(
+                source=phrase,
+                axis=match_name,
+                signals=[str(s) for s in (spec.get("signals") or [])],
+                probes=[str(p) for p in (spec.get("probes") or [])],
+                mapped=True,
+            ))
+        else:
+            if phrase in seen:
+                continue
+            seen.add(phrase)
+            resolved.append(ResolvedAxis(
+                source=phrase,
+                axis=phrase,
+                signals=_tokenize(phrase),
+                probes=[f"'{phrase}'에 해당하는 본인의 경험을 말해보세요."],
+                mapped=False,
+            ))
+    return resolved
+
+
+def score_experience(
+    experience: Experience,
+    axes: list[ResolvedAxis],
+    company: CompanyProfile,
+) -> ExperienceMatch:
+    """경험 1건에 대한 축별 점수와 직무 적합도를 계산한다."""
+    text = experience.searchable_text()
+    match = ExperienceMatch(experience=experience)
+
+    for axis in axes:
+        hits = contains_any(text, axis.signals)
+        score = len(hits)
+        if contains_any(" ".join(experience.axes), [axis.axis]) or axis.axis in experience.axes:
+            score += EXPLICIT_AXIS_BONUS
+            hits = hits + ["직접 태깅"]
+        match.axis_scores[axis.axis] = score
+        match.axis_hits[axis.axis] = hits
+
+    job_terms = company.core_competencies + company.keywords
+    match.job_hits = contains_any(text, job_terms)
+    match.job_fit = len(match.job_hits) * CORE_COMPETENCY_WEIGHT
+
+    if experience.metrics:
+        match.job_fit += METRIC_BONUS
+        match.bonuses.append("정량 성과 있음")
+    if experience.insight:
+        match.job_fit += INSIGHT_BONUS
+        match.bonuses.append("도메인 통찰 있음")
+    if not experience.verified:
+        match.bonuses.append("⚠ 사실 확인 필요(verified: false)")
+    if experience.confidential:
+        match.bonuses.append("⚠ 대외비 — 익명화 필요")
+
+    return match
+
+
+def match_all(note: CareerNote, company: CompanyProfile) -> list[ExperienceMatch]:
+    """전체 경험을 총점 순으로 정렬해 돌려준다."""
+    axes = resolve_axes(company)
+    matches = [score_experience(exp, axes, company) for exp in note.experiences]
+    matches.sort(key=lambda m: (-m.total, m.experience.id))
+    return matches
+
+
+def question_fit(match: ExperienceMatch, question: Question) -> tuple[int, list[str]]:
+    """문항 유형까지 반영한 점수와 그 이유."""
+    profile = QUESTION_PROFILE.get(question.type, QUESTION_PROFILE["free"])
+    score = match.total
+    reasons: list[str] = []
+
+    for axis_name in profile["axes"]:
+        gained = match.axis_scores.get(axis_name, 0)
+        if gained:
+            score += gained
+            reasons.append(f"{question.type} 문항 선호축 {axis_name} +{gained}")
+
+    exp = match.experience
+    for fname in profile["fields"]:
+        value = exp.metrics if fname == "metrics" else getattr(exp, fname, "")
+        if value:
+            score += FIELD_BONUS
+            reasons.append(f"{fname} 작성됨 +{FIELD_BONUS}")
+
+    if question.text:
+        hits = contains_any(exp.searchable_text(), _tokenize(question.text))
+        if hits:
+            score += len(hits)
+            reasons.append(f"문항 키워드 일치: {', '.join(hits[:4])}")
+
+    return score, reasons
+
+
+def recommend(
+    note: CareerNote,
+    company: CompanyProfile,
+    question: Question,
+    limit: int = 3,
+) -> list[tuple[ExperienceMatch, int, list[str]]]:
+    """문항에 쓸 경험 추천. 사용자가 question.use 를 지정했으면 그것을 우선한다."""
+    matches = match_all(note, company)
+    scored = []
+    for match in matches:
+        score, reasons = question_fit(match, question)
+        if question.use and match.experience.id in question.use:
+            score += 100
+            reasons.insert(0, "사용자 지정(use)")
+        scored.append((match, score, reasons))
+    scored.sort(key=lambda item: (-item[1], item[0].experience.id))
+    return scored[:limit]
+
+
+def coverage(note: CareerNote, company: CompanyProfile) -> dict[str, list[str]]:
+    """인재상 축별로 뒷받침할 경험이 있는지 — 비어 있는 축이 곧 준비해야 할 숙제다."""
+    axes = resolve_axes(company)
+    result: dict[str, list[str]] = {}
+    for axis in axes:
+        supporting = []
+        for exp in note.experiences:
+            match = score_experience(exp, [axis], company)
+            if match.axis_scores.get(axis.axis, 0) >= 2:
+                supporting.append(exp.id)
+        result[axis.axis] = supporting
+    return result
