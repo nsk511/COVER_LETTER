@@ -13,12 +13,16 @@ from .loader import lint_rules
 from .models import Answer, CareerNote, CompanyProfile, Question
 from .textutil import (
     canonical_number,
+    particle,
     contains_any,
     count_chars,
     count_for_mode,
     extract_numbers,
     number_only,
     split_sentences,
+    time_equivalents,
+    time_transitions,
+    time_values,
     truncate,
 )
 
@@ -126,7 +130,8 @@ def check_subtitle(answer: Answer, question: Question, company: CompanyProfile,
     has_result = bool(contains_any(subtitle, result_markers))
     has_method = bool(contains_any(subtitle, method_markers))
 
-    if question.type != "motivation" and not (has_result and has_method):
+    formula_types = {"achievement", "challenge", "collaboration", "strength", "strength_weakness"}
+    if question.type in formula_types and not (has_result and has_method):
         missing = []
         if not has_method:
             missing.append("방법(how)")
@@ -146,29 +151,115 @@ def check_subtitle(answer: Answer, question: Question, company: CompanyProfile,
         ))
 
 
+def _cited_metric_texts(answer: Answer, note: CareerNote) -> list[str]:
+    """답변이 근거로 삼은 경험의 수치 표현 목록."""
+    texts: list[str] = []
+    for exp_id in answer.used:
+        exp = note.by_id(exp_id)
+        if exp is None:
+            continue
+        for metric in exp.metrics:
+            for value in (metric.before, metric.after, metric.delta):
+                if value:
+                    texts.append(f"{metric.name} {value}".strip())
+    return texts
+
+
 def check_numbers(answer: Answer, question: Question, note: CareerNote,
                   company: CompanyProfile, report: LintReport) -> None:
     """초안에 있는 수치가 경력 노트/리서치에 실재하는지 대조한다."""
     allowed: set[str] = set()
-    for token in extract_numbers(note.all_text()):
-        allowed.add(canonical_number(token))
-        allowed.add(number_only(token))
-    for item in company.research:
-        for token in extract_numbers(f"{item.claim} {item.date}"):
+
+    def allow(text: str) -> None:
+        for token in extract_numbers(text):
             allowed.add(canonical_number(token))
             allowed.add(number_only(token))
-    for token in extract_numbers(question.text):
-        allowed.add(canonical_number(token))
-        allowed.add(number_only(token))
+            allowed.update(time_equivalents(token))   # 90분 ≡ 1.5시간
+
+    allow(note.all_text())
+    for item in company.research:
+        allow(f"{item.claim} {item.date}")
+    allow(question.text)
+
+    note_times = {value: token for token, value in time_values(note.all_text())}
 
     for token in extract_numbers(answer.full_text()):
         canon, bare = canonical_number(token), number_only(token)
         if canon in allowed or bare in allowed:
             continue
+        hint = ("실제 수치로 고치거나, 근거를 경력 노트(metrics)에 먼저 추가하세요. "
+                "지어낸 숫자는 면접에서 바로 무너집니다")
+        # 같은 시간 단위의 노트 값이 있으면 무엇과 어긋나는지 알려준다.
+        mine = time_values(token)
+        if mine and note_times:
+            nearest = min(note_times, key=lambda v: abs(v - mine[0][1]))
+            hint = f"경력 노트에는 「{note_times[nearest]}」로 적혀 있습니다. 둘 중 어느 쪽이 맞는지 확인하세요"
+        report.add(Finding("NUM", ERROR, question.id,
+                           f"경력 노트에 없는 수치입니다: 「{token}」", hint=hint))
+
+
+def check_contradiction(answer: Answer, question: Question, report: LintReport) -> None:
+    """한 답변 안에서 수치가 서로 어긋나는지 본다.
+
+    '90분이 걸렸다 … 1시간에서 20분으로 줄였다' 처럼, 변화 서술의 시작값이
+    앞서 말한 값과 다른 경우가 대표적이다. 면접에서 가장 먼저 걸리는 실수다.
+    """
+    text = answer.full_text()
+    transitions = time_transitions(text)
+    if not transitions:
+        return
+    for phrase, start, end in transitions:
+        others = {
+            value for token, value in time_values(text)
+            if value not in (start, end) and token not in phrase
+        }
+        if not others:
+            continue
+        if start in others:
+            continue
+        bigger = [v for v in others if v > end]
+        if not bigger:
+            continue
+
+        def fmt(minutes: float) -> str:
+            return f"{minutes / 60:g}시간" if minutes >= 60 and minutes % 60 == 0 else f"{minutes:g}분"
+
+        joined = ", ".join(fmt(v) for v in sorted(bigger, reverse=True))
         report.add(Finding(
-            "NUM", ERROR, question.id,
-            f"경력 노트에 없는 수치입니다: 「{token}」",
-            hint="실제 수치로 고치거나, 근거를 경력 노트(metrics)에 먼저 추가하세요. 지어낸 숫자는 면접에서 바로 무너집니다",
+            "CONTRA", ERROR, question.id,
+            f"같은 답변 안에서 수치가 어긋납니다: 「{phrase}」의 시작값({fmt(start)})이 "
+            f"앞에서 말한 {joined}{particle(joined, '과', '와')} 다릅니다",
+            hint="둘 중 실제 값 하나로 통일하세요. 앞뒤가 다른 숫자는 면접에서 가장 먼저 지적당합니다",
+            evidence=truncate(phrase, 40),
+        ))
+
+
+def check_spacing(answer: Answer, question: Question, report: LintReport) -> None:
+    """흔한 띄어쓰기 오류와 이중 공백."""
+    text = answer.full_text()
+    covered: list[tuple[int, int]] = []
+    rules = sorted(lint_rules().get("spacing", []), key=lambda e: -len(e[0]))
+    for entry in rules:
+        wrong, right = entry[0], entry[1]
+        why = entry[2] if len(entry) > 2 else ""
+        start = text.find(wrong)
+        if start < 0:
+            continue
+        end = start + len(wrong)
+        # 더 긴 규칙이 이미 잡은 자리면 같은 지적을 두 번 하지 않는다
+        if any(start >= a and end <= b for a, b in covered):
+            continue
+        covered.append((start, end))
+        report.add(Finding(
+            "SPACING", WARN, question.id,
+            f"띄어쓰기: 「{wrong}」 → 「{right}」",
+            hint=why,
+        ))
+    if "  " in text.replace("\n", ""):
+        report.add(Finding(
+            "SPACING", WARN, question.id,
+            "공백이 두 칸 이상 들어간 곳이 있습니다",
+            hint="복사·붙여넣기에서 자주 생깁니다. 제출 전 한 번 정리하세요",
         ))
 
 
@@ -333,7 +424,7 @@ def check_evidence_links(answer: Answer, question: Question, note: CareerNote,
                 "REF", WARN, question.id,
                 f"사실 확인이 끝나지 않은 경험입니다(verified: false): {exp_id}",
             ))
-    if not answer.used:
+    if not answer.used and question.type != "social_issue":
         report.add(Finding(
             "REF", INFO, question.id,
             "used(근거 경험 id)가 비어 있습니다",
@@ -350,6 +441,8 @@ def lint_answer(answer: Answer, question: Question, note: CareerNote,
     check_length(answer, question, report)
     check_subtitle(answer, question, company, report)
     check_numbers(answer, question, note, company, report)
+    check_contradiction(answer, question, report)
+    check_spacing(answer, question, report)
     check_cliches(answer, question, report)
     check_overtime(answer, question, report)
     check_weakness(answer, question, company, note, report)

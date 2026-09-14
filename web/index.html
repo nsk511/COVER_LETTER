@@ -408,6 +408,26 @@ const CLICHES = [
   ["많은 것을 배웠습니다", "무엇을 배워 무엇이 달라졌는지 씁니다"]
 ];
 
+const SPACING = [
+  ["하고있습니다", "하고 있습니다", "보조용언은 띄어 씁니다"],
+  ["노력하고있", "노력하고 있", "보조용언은 띄어 씁니다"],
+  ["하고있", "하고 있", "'있다'는 보조용언이라 띄어 씁니다"],
+  ["되어있", "되어 있", "'있다'는 보조용언이라 띄어 씁니다"],
+  ["수있습니다", "수 있습니다", "'수'는 의존명사라 띄어 씁니다"],
+  ["할수있", "할 수 있", "'수'는 의존명사라 띄어 씁니다"],
+  ["하는것", "하는 것", "'것'은 의존명사라 띄어 씁니다"],
+  ["있는것", "있는 것", "'것'은 의존명사라 띄어 씁니다"],
+  ["것같습니다", "것 같습니다", "'같다'는 띄어 씁니다"],
+  ["한만큼", "한 만큼", "관형형 뒤의 '만큼'은 의존명사라 띄어 씁니다"],
+  ["목표 만큼", "목표만큼", "명사 뒤의 '만큼'은 조사라 붙여 씁니다"],
+  ["달가워 하지", "달가워하지", "'-워하다'는 한 단어입니다"],
+  ["수행 해내", "수행해내", "'-해내다'는 붙여 씁니다"],
+  ["좋은성적", "좋은 성적", "관형어와 명사는 띄어 씁니다"],
+  ["큰영향", "큰 영향", "관형어와 명사는 띄어 씁니다"],
+  ["등과같이", "등과 같이", "'같이'는 띄어 씁니다"],
+  ["이라고생각", "이라고 생각", "용언은 띄어 씁니다"]
+];
+
 const OVERTIME = ["야근", "퇴근 후", "퇴근후", "주말에도", "새벽까지", "밤을 새", "밤새워", "휴일에도"];
 const FATAL_WEAKNESS = ["서툽니다", "서툴렀습니다", "못합니다", "부족합니다", "자신이 없습니다", "어려워합니다", "싫어합니다", "피하는 편입니다"];
 const FACT_MARKERS = ["년", "회차", "업계 최초", "1위", "최대", "캠페인", "출시", "수상", "선정", "발표", "인수", "설립", "매출"];
@@ -437,6 +457,21 @@ const QUESTION_TYPES = {
     paragraphs: [["강점 + 근거 경험", 45, "강점 선언 1문장 + 증명 경험 1개"],
                  ["보완이 필요한 점", 35, "치명적 약점 금지. '~에 집중하다 보니 ~에 더 노력이 필요했다'"],
                  ["같은 강점으로 보완 중", 20, "약점을 강점으로 극복하는 구조 + 현재 실천 중인 방법"]] },
+  growth_story: { label: "성장과정", axes: ["성장·학습", "실행력·책임감", "도전·혁신"], fields: ["difficulty", "action", "lesson"],
+    paragraphs: [["영향을 준 사건·인물", 25, "언제, 어떤 상황에서, 누가/무엇이 나를 바꿨는지 구체적으로"],
+                 ["그때 내가 한 행동", 40, "결심이 아니라 행동. 수치로 말할 수 있으면 수치로"],
+                 ["변화와 결과", 20, "무엇이 어떻게 달라졌는지 — 검증 가능한 사실만"],
+                 ["지금의 일하는 방식", 15, "그 태도가 현재 업무에서 어떻게 나타나는지 한 문장"]] },
+  social_issue: { label: "사회이슈", axes: ["전문성", "데이터·분석"], fields: ["insight"],
+    paragraphs: [["이슈 선정과 이유", 20, "왜 이 이슈인지. 지원 업계와의 연결고리를 초반에"],
+                 ["업계·직무에 미치는 영향", 35, "일반론이 아니라 이 산업의 구조로 설명"],
+                 ["내 견해와 근거", 30, "찬반이 아니라 '그래서 무엇을 해야 하는가'"],
+                 ["직무 관점의 시사점", 15, "내 직무에서 무엇을 준비해야 하는지"]] },
+  strength: { label: "강점", axes: ["전문성", "창의·문제해결", "실행력·책임감"], fields: ["insight", "action", "result", "metrics"],
+    paragraphs: [["강점 정의", 15, "한 문장으로. 형용사 말고 행동으로 정의"],
+                 ["증명 경험", 55, "강점이 발휘된 사건 하나. '왜 그 방법이 가능했는가'까지"],
+                 ["결과", 15, "경력 노트에 적힌 숫자만"],
+                 ["직무 연결", 15, "그 강점이 이 직무에서 왜 경쟁력인지"]] },
   growth: { label: "성장·학습", axes: ["성장·학습", "전문성"], fields: ["lesson", "insight"],
     paragraphs: [["배움의 계기", 20, ""], ["학습과 적용", 50, "무엇을 어떻게 배워 업무에 적용했는지"],
                  ["결과", 20, "실제 변화"], ["앞으로", 10, ""]] },
@@ -459,7 +494,7 @@ const WRITING_RULES = [
    2. 텍스트 유틸
    ══════════════════════════════════════════════════════════ */
 
-const NUM_RE = /(?<![\w가-힣])(\d[\d,]*(?:\.\d+)?)\s*(%|퍼센트|배|억|만|천|원|건|명|개|년|개월|주|일|시간|분|초|회차|회|차|위|점)?/g;
+const NUM_RE = /(?<![\w가-힣])(\d[\d,]*(?:\.\d+)?)\s*(%|퍼센트|배|억|만|천|원|건|명|개|년|개월|주|일|시간|분|초|회차|회|차|위|점|급|학기|세트|번|종|가지|kg|km)?/g;
 
 const flat = (s) => (s || "").replace(/\s+/g, "").toLowerCase();
 
@@ -502,6 +537,38 @@ function euroParticle(word) {           /* 로 / 으로 */
   const jong = (last.charCodeAt(0) - 0xac00) % 28;
   return jong === 0 || jong === 8 ? "로" : "으로";   /* 받침 없음 또는 ㄹ 받침 */
 }
+
+/* 시간 단위 — '1시간'과 '60분'이 같은 값임을 알아야 모순을 판별할 수 있다 */
+const TIME_UNITS = { "초": 1 / 60, "분": 1, "시간": 60, "일": 1440 };
+const AFTER_UNIT = "(?=[\\s,.)\\]]|$|이|가|을|를|에|으|까|은|는|의|만|도|씩|와|과|짜|부터|→|~)";
+const TIME_RE = new RegExp("(\\d[\\d,]*(?:\\.\\d+)?)\\s*(초|분|시간|일)" + AFTER_UNIT, "g");
+const TRANSITION_RE = new RegExp(
+  "(\\d[\\d,]*(?:\\.\\d+)?)\\s*(초|분|시간|일)\\s*(?:에서|부터|→|~)\\s*(\\d[\\d,]*(?:\\.\\d+)?)\\s*(초|분|시간|일)", "g");
+
+const toMinutes = (n, unit) => parseFloat(String(n).replace(/,/g, "")) * TIME_UNITS[unit];
+
+function timeValues(text) {
+  const out = [];
+  for (const m of (text || "").matchAll(TIME_RE)) out.push([m[0].trim(), toMinutes(m[1], m[2])]);
+  return out;
+}
+
+function timeTransitions(text) {
+  const out = [];
+  for (const m of (text || "").matchAll(TRANSITION_RE)) {
+    out.push([m[0].trim(), toMinutes(m[1], m[2]), toMinutes(m[3], m[4])]);
+  }
+  return out;
+}
+
+function timeEquivalents(token) {
+  const m = new RegExp("^(\\d[\\d,]*(?:\\.\\d+)?)\\s*(초|분|시간|일)$").exec(canonNum(token));
+  if (!m) return [];
+  const minutes = toMinutes(m[1], m[2]);
+  return Object.entries(TIME_UNITS).map(([unit, factor]) => canonNum(String(minutes / factor) + unit));
+}
+
+const fmtMinutes = (m) => (m >= 60 && m % 60 === 0) ? (m / 60) + "시간" : m + "분";
 
 function particle(word, withFinal, withoutFinal) {
   const last = (word || "").slice(-1);
@@ -708,7 +775,10 @@ const usableResearch = (company) => (company.research || []).filter((r) => r.cla
 
 function allowedNumbers(career, company, question) {
   const set = new Set();
-  const add = (text) => extractNumbers(text).forEach((t) => { set.add(canonNum(t)); set.add(bareNum(t)); });
+  const add = (text) => extractNumbers(text).forEach((t) => {
+    set.add(canonNum(t)); set.add(bareNum(t));
+    timeEquivalents(t).forEach((e) => set.add(e));   /* 90분 ≡ 1.5시간 */
+  });
   (career.experiences || []).forEach((e) => add(expText(e)));
   (career.strengths || []).concat(career.weaknesses || []).forEach((t) => add([t.label, t.detail, t.improving].join(" ")));
   (career.values || []).forEach(add);
@@ -750,7 +820,8 @@ function lintAnswer(question, answer, career, company) {
   } else {
     const hasResult = hits(answer.subtitle, ["줄", "단축", "개선", "높", "낮", "확보", "해결", "만들", "없앤", "0건", "%", "배", "시간", "달성", "이끈", "바꾼"]).length > 0;
     const hasMethod = hits(answer.subtitle, ["로", "으로", "통해", "한", "하여", "써서", "재설계", "표준화", "분석"]).length > 0;
-    if (question.type !== "motivation" && !(hasResult && hasMethod)) {
+    const formulaTypes = ["achievement", "challenge", "collaboration", "strength", "strength_weakness"];
+    if (formulaTypes.includes(question.type) && !(hasResult && hasMethod)) {
       const missing = [];
       if (!hasMethod) missing.push("방법(how)");
       if (!hasResult) missing.push("결과(result)");
@@ -765,10 +836,49 @@ function lintAnswer(question, answer, career, company) {
 
   /* 지어낸 수치 */
   const allowed = allowedNumbers(career, company, question);
+  const noteTimes = new Map(timeValues((career.experiences || []).map(expText).join("\n"))
+    .map(([token, value]) => [value, token]));
   for (const token of extractNumbers(full)) {
     if (allowed.has(canonNum(token)) || allowed.has(bareNum(token))) continue;
-    push("NUM", "ERROR", "경력 노트에 없는 수치입니다: 「" + token + "」",
-      "실제 수치로 고치거나, 근거를 경력 노트에 먼저 추가하세요. 지어낸 숫자는 면접에서 바로 무너집니다");
+    let fix = "실제 수치로 고치거나, 근거를 경력 노트에 먼저 추가하세요. 지어낸 숫자는 면접에서 바로 무너집니다";
+    const mine = timeValues(token);
+    if (mine.length && noteTimes.size) {
+      const nearest = [...noteTimes.keys()].sort((a, b) =>
+        Math.abs(a - mine[0][1]) - Math.abs(b - mine[0][1]))[0];
+      fix = "경력 노트에는 「" + noteTimes.get(nearest) + "」로 적혀 있습니다. 어느 쪽이 맞는지 확인하세요";
+    }
+    push("NUM", "ERROR", "경력 노트에 없는 수치입니다: 「" + token + "」", fix);
+  }
+
+  /* 같은 답변 안에서 수치가 어긋나는지 — '90분이 걸렸다 … 1시간에서 20분으로' */
+  for (const [phrase, start, end] of timeTransitions(full)) {
+    const others = [...new Set(timeValues(full)
+      .filter(([token, value]) => value !== start && value !== end && !phrase.includes(token))
+      .map(([, value]) => value))];
+    if (!others.length || others.includes(start)) continue;
+    const bigger = others.filter((v) => v > end).sort((a, b) => b - a);
+    if (!bigger.length) continue;
+    const joined = bigger.map(fmtMinutes).join(", ");
+    push("CONTRA", "ERROR",
+      "같은 답변 안에서 수치가 어긋납니다: 「" + phrase + "」의 시작값(" + fmtMinutes(start) +
+      ")이 앞에서 말한 " + joined + particle(joined, "과", "와") + " 다릅니다",
+      "둘 중 실제 값 하나로 통일하세요. 앞뒤가 다른 숫자는 면접에서 가장 먼저 지적당합니다",
+      truncate(phrase, 40));
+  }
+
+  /* 띄어쓰기 — 더 긴 규칙이 잡은 자리는 다시 지적하지 않는다 */
+  const covered = [];
+  for (const [wrong, right, why] of [...SPACING].sort((a, b) => b[0].length - a[0].length)) {
+    const at = full.indexOf(wrong);
+    if (at < 0) continue;
+    const end = at + wrong.length;
+    if (covered.some(([a, b]) => at >= a && end <= b)) continue;
+    covered.push([at, end]);
+    push("SPACING", "WARN", "띄어쓰기: 「" + wrong + "」 → 「" + right + "」", why);
+  }
+  if (full.replace(/\n/g, "").includes("  ")) {
+    push("SPACING", "WARN", "공백이 두 칸 이상 들어간 곳이 있습니다",
+      "복사·붙여넣기에서 자주 생깁니다. 제출 전 한 번 정리하세요");
   }
 
   /* 클리셰 / 근무 외 시간 */
@@ -848,7 +958,7 @@ function lintAnswer(question, answer, career, company) {
       "고객사명 등은 'A사', '대형 손해보험사'처럼 일반화하세요");
     if (exp.verified === false) push("REF", "WARN", "사실 확인이 끝나지 않은 경험입니다: " + (exp.title || id));
   }
-  if (!(answer.used || []).length) {
+  if (!(answer.used || []).length && question.type !== "social_issue") {
     push("REF", "INFO", "근거 경험이 지정되지 않았습니다", "어느 경험에 근거한 답변인지 표시해 두면 수치 검증과 면접 준비가 쉬워집니다");
   }
   return out;
@@ -901,10 +1011,13 @@ function buildInterview(career, company, draft) {
     const seenTerms = new Set();
 
     for (const sentence of splitSentences(full)) {
-      const nums = extractNumbers(sentence);
+      /* 단위 없는 한두 자리 숫자('1', '3')는 성과 수치가 아니라 잡음이다 */
+      const nums = extractNumbers(sentence).filter((n) => !/^\d{1,2}$/.test(n));
       if (nums.length) {
+        const joined = nums.slice(0, 3).join(", ");
         add({ category: "수치 검증", risk: "높음",
-          question: "「" + nums.slice(0, 3).join(", ") + "」는 어떻게 측정한 숫자인가요? 계산 기준과 대상 기간을 설명해 주세요.",
+          question: "「" + joined + "」" + particle(joined, "은", "는") +
+            " 어떻게 측정한 숫자인가요? 계산 기준과 대상 기간을 설명해 주세요.",
           source: truncate(sentence, 60),
           prep: "① 무엇을 기준으로 쟀는지 ② 비교 대상(before)이 무엇인지 ③ 그 숫자를 확인한 방법" });
       }

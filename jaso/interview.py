@@ -49,7 +49,8 @@ def _numeric_probe(sentence: str, tokens: list[str], qid: str) -> InterviewQuest
     joined = ", ".join(tokens[:3])
     return InterviewQuestion(
         category="수치 검증",
-        question=f"「{joined}」는 어떻게 측정한 숫자인가요? 계산 기준과 대상 기간을 설명해 주세요.",
+        question=f"「{joined}」{particle(joined, '은', '는')} 어떻게 측정한 숫자인가요? "
+                 "계산 기준과 대상 기간을 설명해 주세요.",
         source=truncate(sentence, 60),
         prep="① 무엇을 기준으로 쟀는지 ② 비교 대상(before)이 무엇인지 ③ 그 숫자를 확인한 방법(쿼리/검증표)",
         risk=HIGH,
@@ -77,7 +78,8 @@ def probe_answer(answer: Answer, question: Question, note: CareerNote,
     text = answer.full_text()
 
     for sentence in split_sentences(text):
-        numbers = extract_numbers(sentence)
+        # 단위 없는 한두 자리 숫자('1', '3')는 성과 수치가 아니라 잡음이다
+        numbers = [n for n in extract_numbers(sentence) if not n.isdigit() or len(n) > 2]
         if numbers:
             results.append(_numeric_probe(sentence, numbers, question.id))
 

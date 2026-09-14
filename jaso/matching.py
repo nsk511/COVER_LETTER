@@ -39,6 +39,18 @@ QUESTION_PROFILE: dict[str, dict[str, list[str]]] = {
         "axes": ["성장·학습", "전문성"],
         "fields": ["lesson", "insight"],
     },
+    "growth_story": {
+        "axes": ["성장·학습", "실행력·책임감", "도전·혁신"],
+        "fields": ["difficulty", "action", "lesson"],
+    },
+    "social_issue": {
+        "axes": ["전문성", "데이터·분석"],
+        "fields": ["insight"],
+    },
+    "strength": {
+        "axes": ["전문성", "창의·문제해결", "실행력·책임감"],
+        "fields": ["insight", "action", "result", "metrics"],
+    },
     "free": {"axes": [], "fields": []},
 }
 

@@ -121,6 +121,57 @@ class LintTest(unittest.TestCase):
         self.assertIn("LEN", [f.rule for f in report.errors()])
 
 
+class ContradictionTest(unittest.TestCase):
+    """같은 답변 안에서 수치가 어긋나는 경우 — 실제 자소서 수정 중 가장 많이 나온 실수."""
+
+    def _lint(self, body: str):
+        note, company = load()
+        answer = Answer(id="q2", subtitle="원인을 찾아 78% 단축", body=body)
+        return lint_draft(Draft(answers=[answer]), note, company)
+
+    def test_transition_start_differs_from_earlier_value(self):
+        report = self._lint("최초 구동에는 약 90분이 걸렸습니다. 구동시간을 1시간에서 20분까지 단축했습니다.")
+        self.assertIn("CONTRA", [f.rule for f in report.errors()])
+
+    def test_consistent_transition_passes(self):
+        report = self._lint("최초 구동에는 약 90분이 걸렸습니다. 구동시간을 90분에서 20분까지 단축했습니다.")
+        self.assertNotIn("CONTRA", [f.rule for f in report.findings])
+
+    def test_equivalent_unit_is_not_a_contradiction(self):
+        report = self._lint("최초 구동에는 약 90분이 걸렸습니다. 구동시간을 1.5시간에서 20분까지 단축했습니다.")
+        self.assertNotIn("CONTRA", [f.rule for f in report.findings])
+
+
+class SpacingTest(unittest.TestCase):
+    def test_common_spacing_error_reported(self):
+        note, company = load()
+        answer = Answer(id="q2", subtitle="집계 단위를 바꿔 78% 단축", body="실무에 접목하려 노력하고있습니다.")
+        report = lint_draft(Draft(answers=[answer]), note, company)
+        self.assertIn("SPACING", [f.rule for f in report.findings])
+
+    def test_longer_rule_wins_over_shorter(self):
+        note, company = load()
+        answer = Answer(id="q2", subtitle="집계 단위를 바꿔 78% 단축", body="지식을 실무로 확장하고있습니다.")
+        report = lint_draft(Draft(answers=[answer]), note, company)
+        spacing = [f for f in report.findings if f.rule == "SPACING"]
+        self.assertEqual(len(spacing), 1, [f.message for f in spacing])
+
+
+class QuestionTypeTest(unittest.TestCase):
+    def test_new_types_have_profiles_and_layouts(self):
+        from jaso.matching import QUESTION_PROFILE
+        for name in ("growth_story", "social_issue", "strength"):
+            self.assertIn(name, planning.PARAGRAPH_PLANS, name)
+            self.assertIn(name, QUESTION_PROFILE, name)
+
+    def test_subtitle_formula_not_forced_on_essay_types(self):
+        note, company = load()
+        company.questions[0].type = "social_issue"
+        answer = Answer(id="q1", subtitle="금리 변화에 대비하는 보험사의 장기적인 시각", body="금리는 보험사에 영향을 줍니다.")
+        report = lint_draft(Draft(answers=[answer]), note, company)
+        self.assertNotIn("SUB", [f.rule for f in report.findings])
+
+
 class InterviewTest(unittest.TestCase):
     def test_numbers_produce_followup_questions(self):
         note, company = load()
