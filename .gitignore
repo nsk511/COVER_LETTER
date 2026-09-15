@@ -5,5 +5,5 @@ venv/
 out/
 # 개인 정보가 담기는 실제 작업 파일 — 저장소에 올리지 않습니다
 /career.yaml
-/company.yaml
-/draft.yaml
+/company*.yaml
+/draft*.yaml
