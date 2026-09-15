@@ -1724,7 +1724,7 @@ function counterHTML(q, answer) {
   const minMark = l.min && l.max ? Math.round(l.min / l.max * 100) : null;
   return '<div class="counter"><span class="big ' + cls + '">' + actual + "</span>" +
     "<span>/ " + limitLabel(q) + "</span>" +
-    '<span style="margin-left:auto;color:var(--muted)">공백포함 ' + c.withSpace + " · 공백제외 " + c.withoutSpace + "</span></div>" +
+    '<span style="margin-left:auto;color:var(--muted)">소제목 포함 · 공백포함 ' + c.withSpace + " · 공백제외 " + c.withoutSpace + "</span></div>" +
     '<div class="gauge"><i class="' + (cls === "over" ? "over" : "") + '" style="width:' + pct + '%"></i>' +
     (minMark !== null ? '<b style="left:' + minMark + '%"></b>' : "") + "</div>";
 }
