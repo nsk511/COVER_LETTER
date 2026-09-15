@@ -113,6 +113,17 @@ def has_final_consonant(word: str) -> bool | None:
     return (ord(last) - 0xAC00) % 28 != 0
 
 
+def euro_particle(word: str) -> str:
+    """'로' / '으로' 중 맞는 것을 고른다 (ㄹ 받침은 '로')."""
+    if not word:
+        return "로"
+    last = word[-1]
+    if not ("가" <= last <= "힣"):
+        return "(으)로"
+    jong = (ord(last) - 0xAC00) % 28
+    return "로" if jong in (0, 8) else "으로"
+
+
 def particle(word: str, with_final: str, without_final: str) -> str:
     """받침에 맞는 조사만 돌려준다. particle('쿼리', '이', '가') → '가'"""
     final = has_final_consonant(word)

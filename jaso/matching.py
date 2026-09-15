@@ -39,6 +39,14 @@ QUESTION_PROFILE: dict[str, dict[str, list[str]]] = {
         "axes": ["성장·학습", "전문성"],
         "fields": ["lesson", "insight"],
     },
+    "value_definition": {
+        "axes": ["정직·신뢰", "실행력·책임감", "전문성"],
+        "fields": ["insight", "action", "lesson"],
+    },
+    "opinion_experience": {
+        "axes": ["협업·소통", "고객중심", "창의·문제해결"],
+        "fields": ["collaboration", "difficulty", "action"],
+    },
     "growth_story": {
         "axes": ["성장·학습", "실행력·책임감", "도전·혁신"],
         "fields": ["difficulty", "action", "lesson"],
@@ -54,6 +62,9 @@ QUESTION_PROFILE: dict[str, dict[str, list[str]]] = {
     "free": {"axes": [], "fields": []},
 }
 
+DEFAULT_AXIS_SOURCE = "(인재상 미입력 — 표준 역량축 사용)"
+
+PREFERRED_AXIS_WEIGHT = 3
 EXPLICIT_AXIS_BONUS = 4
 METRIC_BONUS = 2
 INSIGHT_BONUS = 2
@@ -162,7 +173,27 @@ def resolve_axes(company: CompanyProfile) -> list[ResolvedAxis]:
                 probes=[f"'{phrase}'에 해당하는 본인의 경험을 말해보세요."],
                 mapped=False,
             ))
+
+    if not resolved:
+        # 인재상을 아직 모르는 회사도 많다. 그럴 때 축 점수를 0으로 두면
+        # 문항 유형별 선호축이 통째로 죽어 추천이 무의미해지므로,
+        # 표준 역량축 전체를 기본값으로 쓴다.
+        resolved = [
+            ResolvedAxis(
+                source=DEFAULT_AXIS_SOURCE,
+                axis=axis_name,
+                signals=[str(x) for x in (spec.get("signals") or [])],
+                probes=[str(x) for x in (spec.get("probes") or [])],
+                mapped=True,
+            )
+            for axis_name, spec in dictionary.items()
+        ]
     return resolved
+
+
+def using_default_axes(company: CompanyProfile) -> bool:
+    """인재상 미입력으로 표준 축을 대신 쓰고 있는지."""
+    return not [p for p in company.talent_profile if p]
 
 
 def score_experience(
@@ -212,14 +243,19 @@ def match_all(note: CareerNote, company: CompanyProfile) -> list[ExperienceMatch
 def question_fit(match: ExperienceMatch, question: Question) -> tuple[int, list[str]]:
     """문항 유형까지 반영한 점수와 그 이유."""
     profile = QUESTION_PROFILE.get(question.type, QUESTION_PROFILE["free"])
-    score = match.total
+    preferred = set(profile["axes"])
     reasons: list[str] = []
 
-    for axis_name in profile["axes"]:
-        gained = match.axis_scores.get(axis_name, 0)
-        if gained:
-            score += gained
-            reasons.append(f"{question.type} 문항 선호축 {axis_name} +{gained}")
+    # 모든 축을 같은 무게로 더하면 '내용이 많은 경험'이 문항과 무관하게 1등이 된다.
+    # 문항이 요구하는 축에 가중치를 주어 관련성이 점수를 지배하게 한다.
+    score = match.job_fit
+    for axis_name, gained in match.axis_scores.items():
+        if not gained:
+            continue
+        weight = PREFERRED_AXIS_WEIGHT if axis_name in preferred else 1
+        score += gained * weight
+        if axis_name in preferred:
+            reasons.append(f"{profile.get('label', question.type)} 선호축 {axis_name} {gained}×{weight}")
 
     exp = match.experience
     for fname in profile["fields"]:

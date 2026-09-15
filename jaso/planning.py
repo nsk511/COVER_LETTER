@@ -7,10 +7,13 @@
 
 from __future__ import annotations
 
+import re
+from collections import Counter
 from dataclasses import dataclass, field
 
 from .matching import ExperienceMatch, recommend, resolve_axes
 from .models import CareerNote, CompanyProfile, Experience, Question
+from .textutil import euro_particle, truncate
 
 # 문항 유형별 문단 구성과 분량 배분(%)
 PARAGRAPH_PLANS: dict[str, list[tuple[str, int, str]]] = {
@@ -60,6 +63,18 @@ PARAGRAPH_PLANS: dict[str, list[tuple[str, int, str]]] = {
         ("증명 경험", 55, "강점이 발휘된 사건 하나. '왜 그 방법이 가능했는가'까지"),
         ("결과", 15, "경력 노트에 적힌 숫자만"),
         ("직무 연결", 15, "그 강점이 이 직무에서 왜 경쟁력인지"),
+    ],
+    "value_definition": [
+        ("정의", 20, "'저에게 X란 ~입니다' 한 문장. 사전적 정의 말고 본인 기준으로"),
+        ("그렇게 정의한 근거", 20, "왜 그렇게 생각하게 됐는지 — 업무 맥락에서"),
+        ("증명 경험", 45, "그 정의대로 행동한 사건 하나. 판단 근거를 드러낼 것"),
+        ("결과와 배운 점", 15, "결과는 경력 노트의 숫자로, 배운 점은 한 문장"),
+    ],
+    "opinion_experience": [
+        ("원인에 대한 내 생각", 25, "일반론 말고 구조적 원인 한 가지. 단정하지 말 것"),
+        ("실제 겪은 상황", 20, "언제, 누구와, 무엇이 달랐는지"),
+        ("내가 한 행동", 35, "'우리'가 아니라 '내가' 한 일을 동사로"),
+        ("결과와 원칙", 20, "결과 + 그로부터 세운 본인만의 원칙 한 문장"),
     ],
     "growth": [
         ("배움의 계기", 20, ""),
@@ -123,7 +138,11 @@ def _subtitle_candidates(exp: Experience | None, question: Question,
     """[방법] + [결과] 공식으로 소제목 후보를 만든다 (초안 재료, 그대로 쓰지 말 것)."""
     if exp is None:
         return []
-    metric = exp.metrics[0] if exp.metrics else None
+    # 변화를 보여주는 짧은 수치를 우선한다 (2억 건 같은 규모값보다 90분→20분이 낫다)
+    short = [m for m in exp.metrics if len(m.delta) <= 20 and len(m.after) <= 20]
+    metric = next((m for m in short if m.delta), None) \
+        or next((m for m in short if m.before and m.after), None) \
+        or (short[0] if short else None)
     result = ""
     if metric:
         if metric.delta:
@@ -134,20 +153,27 @@ def _subtitle_candidates(exp: Experience | None, question: Question,
             result = f"{metric.name} {metric.after}".strip()
     result = result or exp.result[:20]
 
-    method = exp.title.split()[0] if exp.title else exp.role
+    # 제목의 '— 이하'는 결과 설명이므로 방법 부분만 남긴다
+    method = (exp.title.split("—")[0] if exp.title else exp.role).strip()
+    # 소제목의 앞부분이 너무 길면 뒤쪽 핵심 어구만 남긴다
+    #   '단기보험 RA(위험조정액) 산출 시스템 고도화' → '산출 시스템 고도화'
+    words = method.split()
+    while len(words) > 1 and len(" ".join(words)) > 22:
+        words.pop(0)
+    method = " ".join(words)
     candidates = []
     if question.type == "motivation":
         theme = company.name or "회사"
         candidates.append(f"{exp.domain[0] if exp.domain else '현장'}에서 확인한 기준, {theme}에서 잇겠습니다")
     if result and exp.insight:
-        head = exp.insight.split(".")[0].strip()
-        if len(head) > 28:                       # 단어 중간에서 잘리지 않게
-            head = head[:28].rsplit(" ", 1)[0]
-        candidates.append(f"{head}, {result}")
+        # 첫 절만 쓰되, 자연스럽게 끊기지 않으면 후보에서 뺀다
+        head = re.split(r"[.,]", exp.insight)[0].strip()
+        if 6 <= len(head) <= 30:
+            candidates.append(f"{head}, {result}")
     if result and method:
-        candidates.append(f"{method}(으)로 {result}")
+        candidates.append(f"{method}{euro_particle(method)} {result}")
     if exp.title:
-        candidates.append(exp.title)
+        candidates.append(truncate(exp.title, 40))
     return [c.strip() for c in candidates if c.strip()][:4]
 
 
@@ -181,8 +207,45 @@ def plan_question(question: Question, note: CareerNote,
     return plan
 
 
+def flag_overuse(plans: list[QuestionPlan]) -> list[str]:
+    """한 경험이 여러 문항의 주 경험으로 몰리는지 본다.
+
+    자소서 전체가 한 경험에 기대면 '이 사람은 이야깃거리가 하나뿐'으로 읽힌다.
+    문항별 경고와 함께, 아직 어디에도 쓰이지 않은 경험을 대안으로 알려준다.
+    """
+    primaries = Counter(p.primary().id for p in plans if p.primary())
+    overused = {eid for eid, n in primaries.items() if n >= 2}
+    if not overused:
+        return []
+
+    notes: list[str] = []
+    for exp_id, count in sorted(primaries.items()):
+        if exp_id not in overused:
+            continue
+        where = [p.question.id for p in plans if p.primary() and p.primary().id == exp_id]
+        notes.append(f"{exp_id} 이(가) {count}개 문항({', '.join(where)})의 주 경험입니다.")
+
+    for plan in plans:
+        primary = plan.primary()
+        if primary is None or primary.id not in overused:
+            continue
+        alternative = next(
+            (m.experience for m, _, _ in plan.picks[1:] if primaries[m.experience.id] == 0),
+            None,
+        )
+        message = f"주 경험 {primary.id} 이(가) 다른 문항에도 쓰입니다."
+        if alternative is not None:
+            message += f" 겹치지 않는 대안: {alternative.id} ({alternative.label()})"
+        else:
+            message += " 겹치지 않는 대안이 없습니다 — 경력 노트에 경험을 더 추가하세요."
+        plan.warnings.append(message)
+    return notes
+
+
 def plan_all(note: CareerNote, company: CompanyProfile) -> list[QuestionPlan]:
-    return [plan_question(q, note, company) for q in company.questions]
+    plans = [plan_question(q, note, company) for q in company.questions]
+    flag_overuse(plans)
+    return plans
 
 
 # --------------------------------------------------------------------------
