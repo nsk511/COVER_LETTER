@@ -363,7 +363,7 @@ const AXES = {
     signals: ["SQL", "쿼리", "데이터", "통계", "산출", "집계", "모형", "모델링", "검증", "추정", "엑셀", "파이썬", "지표"],
     probes: ["분석 결과가 직관과 달랐을 때 어떻게 판단했나요?", "데이터 품질 문제를 발견한 경험이 있나요?"] },
   "실행력·책임감": {
-    aliases: ["실행", "실행력", "책임", "주인의식", "끈기", "완수", "성실", "오너십"],
+    aliases: ["실행", "실행력", "책임", "주인의식", "끈기", "완수", "성실", "오너십", "성과", "성과중심", "성과주의"],
     signals: ["마감", "기한", "일정", "완료", "끝까지", "단독", "담당", "주도", "마무리", "재작업"],
     probes: ["아무도 시키지 않았는데 끝까지 마무리한 일이 있나요?",
              "일정이 불가능해 보였을 때 무엇을 포기하고 무엇을 지켰나요?"] },
@@ -622,22 +622,20 @@ function resolveAxes(company) {
   const seen = new Set();
   for (const phrase of company.talentProfile || []) {
     if (!phrase) continue;
-    let best = null;
-    for (const [name, spec] of Object.entries(AXES)) {
-      const found = hits(phrase, spec.aliases.concat([name]));
-      if (!found.length) continue;
-      const strength = Math.max(...found.map((h) => flat(h).length));
-      if (!best || strength > best[0]) best = [strength, name];
-    }
-    if (best) {
-      const name = best[1];
-      if (seen.has(name)) {
-        const prev = out.find((a) => a.axis === name);
-        if (prev && !prev.source.includes(phrase)) prev.source += " / " + phrase;
-        continue;
+    /* '신뢰와 소통'처럼 한 문구가 둘 이상의 축을 담는 경우가 흔하므로 모두 반영한다 */
+    const matched = Object.entries(AXES)
+      .filter(([name, spec]) => hits(phrase, spec.aliases.concat([name])).length)
+      .map(([name]) => name);
+    if (matched.length) {
+      for (const name of matched) {
+        if (seen.has(name)) {
+          const prev = out.find((a) => a.axis === name);
+          if (prev && !prev.source.includes(phrase)) prev.source += " / " + phrase;
+          continue;
+        }
+        seen.add(name);
+        out.push({ source: phrase, axis: name, signals: AXES[name].signals, probes: AXES[name].probes, mapped: true });
       }
-      seen.add(name);
-      out.push({ source: phrase, axis: name, signals: AXES[name].signals, probes: AXES[name].probes, mapped: true });
     } else {
       if (seen.has(phrase)) continue;
       seen.add(phrase);
@@ -787,6 +785,9 @@ function planQuestion(question, career, company) {
     warnings.push("확인된 회사 리서치가 없습니다. 지원동기는 리서치 없이 쓰지 않습니다.");
   }
   if (!(question.limit || {}).max && !(question.limit || {}).min) warnings.push("글자수 제한이 입력되지 않았습니다.");
+  if (!(company.coreCompetencies || []).length) {
+    warnings.push("직무 핵심역량이 비어 있어 실무 경험과 그 밖의 경험을 구분하지 못합니다. 직무기술서의 담당 업무를 넣으세요.");
+  }
   return {
     question, target, picks, warnings,
     paragraphs: spec.paragraphs.map(([name, share, guide]) =>

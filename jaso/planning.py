@@ -204,6 +204,11 @@ def plan_question(question: Question, note: CareerNote,
         )
     if not question.limit.max and not question.limit.min:
         plan.warnings.append("글자수 제한이 입력되지 않았습니다. 공고 원문을 확인하세요.")
+    if not company.core_competencies:
+        plan.warnings.append(
+            "직무 핵심역량(core_competencies)이 비어 있어 실무 경험과 그 밖의 경험을 "
+            "구분하지 못합니다. 직무기술서의 담당 업무를 넣으세요."
+        )
     return plan
 
 

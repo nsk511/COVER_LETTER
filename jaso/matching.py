@@ -134,34 +134,29 @@ def resolve_axes(company: CompanyProfile) -> list[ResolvedAxis]:
         if not phrase:
             continue
         flat = strip_spaces(phrase)
-        # 여러 축의 alias 에 걸리면 가장 긴(=구체적인) alias 를 가진 축을 택한다.
-        best: tuple[int, str] | None = None
-        for axis_name, spec in dictionary.items():
-            aliases = [str(a) for a in (spec.get("aliases") or [])] + [axis_name]
-            hits = contains_any(flat, aliases)
-            if not hits:
-                continue
-            strength = max(len(strip_spaces(h)) for h in hits)
-            if best is None or strength > best[0]:
-                best = (strength, axis_name)
-        match_name = best[1] if best else None
-        if match_name:
-            spec = dictionary[match_name]
-            key = match_name
-            if key in seen:
-                # 같은 축에 걸리는 인재상 문구가 둘이면 원문만 덧붙인다.
-                for item in resolved:
-                    if item.axis == key and phrase not in item.source:
-                        item.source = f"{item.source} / {phrase}"
-                continue
-            seen.add(key)
-            resolved.append(ResolvedAxis(
-                source=phrase,
-                axis=match_name,
-                signals=[str(s) for s in (spec.get("signals") or [])],
-                probes=[str(p) for p in (spec.get("probes") or [])],
-                mapped=True,
-            ))
+        # '신뢰와 소통'처럼 한 문구가 둘 이상의 축을 담는 경우가 흔하므로
+        # 걸리는 축을 모두 반영한다.
+        matched = [
+            axis_name for axis_name, spec in dictionary.items()
+            if contains_any(flat, [str(a) for a in (spec.get("aliases") or [])] + [axis_name])
+        ]
+        if matched:
+            for axis_name in matched:
+                if axis_name in seen:
+                    # 같은 축에 걸리는 문구가 둘이면 원문만 덧붙인다.
+                    for item in resolved:
+                        if item.axis == axis_name and phrase not in item.source:
+                            item.source = f"{item.source} / {phrase}"
+                    continue
+                seen.add(axis_name)
+                spec = dictionary[axis_name]
+                resolved.append(ResolvedAxis(
+                    source=phrase,
+                    axis=axis_name,
+                    signals=[str(s) for s in (spec.get("signals") or [])],
+                    probes=[str(p) for p in (spec.get("probes") or [])],
+                    mapped=True,
+                ))
         else:
             if phrase in seen:
                 continue
