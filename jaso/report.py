@@ -8,7 +8,7 @@ from datetime import date
 
 from .interview import InterviewPack
 from .lint import LintReport
-from .matching import match_all, resolve_axes, coverage
+from .matching import match_all, resolve_axes, coverage, vocabulary_gap
 from .models import CareerNote, CompanyProfile, Draft
 from .planning import QuestionPlan
 from .textutil import count_chars, truncate
@@ -54,6 +54,18 @@ def match_markdown(note: CareerNote, company: CompanyProfile) -> str:
             "",
             f"> 비어 있는 축({', '.join(gaps)})은 자소서에서 억지로 만들지 말고, "
             "실제 경험이 있는지 다시 떠올려 경력 노트에 추가하세요. 없으면 그 축은 비워둡니다.",
+        ]
+
+    words = vocabulary_gap(note, company)
+    if words:
+        lines += [
+            "",
+            "## 4. 회사가 쓰는 말 중 내 경력 노트에 없는 것",
+            "",
+            ", ".join(f"`{w}`" for w in words),
+            "",
+            "> 억지로 끼워 넣으라는 신호가 아닙니다. 회사가 중요하게 보는 영역에 "
+            "실제 접점이 있었는지 다시 떠올려 보라는 신호입니다.",
         ]
     return "\n".join(lines) + "\n"
 

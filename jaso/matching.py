@@ -299,3 +299,64 @@ def coverage(note: CareerNote, company: CompanyProfile) -> dict[str, list[str]]:
                 supporting.append(exp.id)
         result[axis.axis] = supporting
     return result
+
+
+# 어절 끝에 붙는 조사 — 긴 것부터 떼어낸다
+_PARTICLES = (
+    "에게서", "으로써", "으로서", "에서는", "이라는", "에서", "으로", "부터", "까지",
+    "에게", "처럼", "보다", "마다", "이나", "라도", "이고", "과의", "와의", "의",
+    "은", "는", "이", "가", "을", "를", "에", "로", "과", "와", "도", "만",
+)
+# 용언 활용형으로 끝나면 명사가 아니다
+_VERB_TAILS = (
+    "하는", "되는", "하여", "되어", "하고", "되고", "하기", "되기", "지고", "시키고",
+    "이며", "으며", "하며", "되며", "이고", "리고", "지는", "되지", "하지", "받는",
+    "찾기", "여기고", "다하여", "갖춘", "느껴", "이라", "이다",
+    "될", "할", "됨", "함", "든", "친", "낸",
+)
+
+
+def _noun(token: str) -> str:
+    """어절에서 조사를 떼어 명사에 가깝게 만든다 (형태소 분석기 없는 근사)."""
+    for tail in _VERB_TAILS:
+        if token.endswith(tail):
+            return ""
+    for particle in _PARTICLES:
+        if len(token) > len(particle) + 1 and token.endswith(particle):
+            return token[: -len(particle)]
+    return token
+
+
+# 인재상 문구에서 걸러낼 기능어 — 회사 고유어만 남기기 위한 최소한의 목록
+_GENERIC_WORDS = {
+    "인재", "위해", "노력", "하는", "바탕", "모든", "최고", "최선", "자세", "가치",
+    "지속적으로", "끊임없이", "새로운", "항상", "열린", "마음", "다하여", "전체",
+    "통해", "되기", "여기고", "처리하여", "받는", "찾기", "추구하는", "갖춘",
+    "매사에", "있도록", "가지고", "우리", "회사", "사람", "분야", "업무", "조직",
+    "정신", "의식", "능력", "역량", "경험", "생각", "대한", "또는", "그리고",
+    "자신", "본인", "함께", "만드는", "중심", "관리", "그를", "등을", "등의",
+    "전체", "성과", "제고", "극대화", "지속적", "미래지향적", "혁신적", "역동적",
+    "열정적", "진취적", "프로다운", "최상", "가족",
+}
+
+
+def vocabulary_gap(note: CareerNote, company: CompanyProfile, limit: int = 14) -> list[str]:
+    """회사가 쓰는 말 중 경력 노트에 한 번도 나오지 않는 단어.
+
+    인재상에만 있고 내 글에는 없는 단어가 많다는 건, 회사가 중요하게 보는 영역에
+    접점이 없다는 뜻이다. 억지로 끼워 넣으라는 신호가 아니라, 실제 접점이 있는지
+    다시 떠올려 보라는 신호다.
+    """
+    note_text = strip_spaces(note.all_text()).lower()
+    seen: set[str] = set()
+    missing: list[str] = []
+    for phrase in company.talent_profile:
+        for raw in _tokenize(phrase):
+            token = _noun(raw)
+            key = token.lower()
+            if not token or len(token) < 2 or key in seen or token in _GENERIC_WORDS:
+                continue
+            seen.add(key)
+            if key not in note_text:
+                missing.append(token)
+    return missing[:limit]

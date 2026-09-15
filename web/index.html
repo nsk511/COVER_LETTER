@@ -796,6 +796,47 @@ function planQuestion(question, career, company) {
   };
 }
 
+/* 어절 끝의 조사를 떼어 명사에 가깝게 만든다 (형태소 분석기 없는 근사) */
+const PARTICLES = ["에게서","으로써","으로서","에서는","이라는","에서","으로","부터","까지",
+  "에게","처럼","보다","마다","이나","라도","이고","과의","와의","의",
+  "은","는","이","가","을","를","에","로","과","와","도","만"];
+const VERB_TAILS = ["하는","되는","하여","되어","하고","되고","하기","되기","지고","시키고",
+  "이며","으며","하며","되며","이고","리고","지는","되지","하지","받는",
+  "찾기","여기고","다하여","갖춘","느껴","이라","이다","될","할","됨","함","든","친","낸"];
+const GENERIC_WORDS = new Set(["인재","위해","노력","하는","바탕","모든","최고","최선","자세","가치",
+  "지속적으로","끊임없이","새로운","항상","열린","마음","다하여","전체","통해","되기","여기고",
+  "처리하여","받는","찾기","추구하는","갖춘","매사에","있도록","가지고","우리","회사","사람",
+  "분야","업무","조직","정신","의식","능력","역량","경험","생각","대한","또는","그리고",
+  "자신","본인","함께","만드는","중심","관리","그를","등을","등의","성과","제고","극대화",
+  "지속적","미래지향적","혁신적","역동적","열정적","진취적","프로다운","최상","가족"]);
+
+function toNoun(token) {
+  if (VERB_TAILS.some((t) => token.endsWith(t))) return "";
+  for (const particle of PARTICLES) {
+    if (token.length > particle.length + 1 && token.endsWith(particle)) return token.slice(0, -particle.length);
+  }
+  return token;
+}
+
+/* 인재상에만 있고 내 글에는 없는 단어 — 회사가 보는 영역에 접점이 있는지 되묻는 장치 */
+function vocabularyGap(career, company, limit = 14) {
+  const noteText = flat((career.experiences || []).map(expText).join(" ") +
+    (career.values || []).join(" ") +
+    (career.strengths || []).concat(career.weaknesses || []).map((t) => t.label + " " + (t.detail || "")).join(" "));
+  const seen = new Set();
+  const missing = [];
+  for (const phrase of company.talentProfile || []) {
+    for (const raw of phrase.replace(/[^\p{L}\p{N}]+/gu, " ").split(" ")) {
+      const token = toNoun(raw);
+      const key = token.toLowerCase();
+      if (!token || token.length < 2 || seen.has(key) || GENERIC_WORDS.has(token)) continue;
+      seen.add(key);
+      if (!noteText.includes(key)) missing.push(token);
+    }
+  }
+  return missing.slice(0, limit);
+}
+
 function planAll(career, company) {
   const plans = (company.questions || []).map((q) => planQuestion(q, career, company));
   /* 한 경험이 여러 문항의 주 경험으로 몰리면 '이야깃거리가 하나뿐'으로 읽힌다 */
@@ -1627,6 +1668,7 @@ function renderMatch() {
     (ids.length ? ids.map((id) => esc(id)).join(", ")
       : '<span style="color:var(--critical)">뒷받침할 경험 없음</span>') + "</td></tr>").join("");
   const empty = Object.entries(cov).filter(([, ids]) => !ids.length).map(([a]) => a);
+  const words = vocabularyGap(career, company);
 
   $("#panel-match").innerHTML =
     '<div class="panel-head"><h2 id="h-match">인재상 ↔ 경험 매칭</h2>' +
@@ -1643,7 +1685,11 @@ function renderMatch() {
     covRows + "</tbody></table></div>" +
     (empty.length ? '<p class="note" style="margin-top:10px">비어 있는 축(' + esc(empty.join(", ")) +
       ")은 자소서에서 억지로 만들지 말고, 실제 경험이 있는지 다시 떠올려 경력 노트에 추가하세요. 없으면 그 축은 비워 둡니다.</p>" : "") +
-    "</div></div>";
+    "</div>" +
+    (words.length ? '<div class="card"><h3>회사가 쓰는 말 중 내 경력 노트에 없는 것</h3>' +
+      '<div class="tag-input" style="margin:8px 0">' + words.map((w) => '<span class="chip">' + esc(w) + "</span>").join("") + "</div>" +
+      '<p class="note">억지로 끼워 넣으라는 신호가 아닙니다. 회사가 중요하게 보는 영역에 실제 접점이 있었는지 다시 떠올려 보라는 신호입니다.</p></div>' : "") +
+    "</div>";
 }
 </script>
 
