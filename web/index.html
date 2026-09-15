@@ -907,7 +907,9 @@ function lintAnswer(question, answer, career, company) {
   if (!answer.subtitle) {
     push("SUB", "ERROR", "소제목이 없습니다", "기본 공식 [방법(how)] + [결과(result)]");
   } else {
-    const hasResult = hits(answer.subtitle, ["줄", "단축", "개선", "높", "낮", "확보", "해결", "만들", "없앤", "0건", "%", "배", "시간", "달성", "이끈", "바꾼"]).length > 0;
+    /* 수치가 들어 있으면 그 자체가 결과다 ('특급전사 3회', '90분→20분') */
+    const hasResult = hits(answer.subtitle, ["줄", "단축", "개선", "높", "낮", "확보", "해결", "만들", "없앤", "0건", "%", "배", "시간", "달성", "이끈", "바꾼"]).length > 0
+      || extractNumbers(answer.subtitle).length > 0;
     const hasMethod = hits(answer.subtitle, ["로", "으로", "통해", "한", "하여", "써서", "재설계", "표준화", "분석"]).length > 0;
     const formulaTypes = ["achievement", "challenge", "collaboration", "strength", "strength_weakness"];
     if (formulaTypes.includes(question.type) && !(hasResult && hasMethod)) {
@@ -1277,13 +1279,16 @@ const state = {
 function activate(id) {
   const space = state.spaces[id];
   if (!space) return;
+  if (state.activeId && state.spaces[state.activeId]) {
+    state.spaces[state.activeId].activeQ = state.activeQ;   // 보던 문항을 회사별로 기억한다
+  }
   state.activeId = id;
   state.company = space.company;
   state.draft = space.draft;
-  const first = (space.company.questions || [])[0];
-  if (!(space.company.questions || []).some((q) => q.id === state.activeQ)) {
-    state.activeQ = first ? first.id : null;
-  }
+  const questions = space.company.questions || [];
+  state.activeQ = questions.some((q) => q.id === space.activeQ)
+    ? space.activeQ
+    : (questions[0] ? questions[0].id : null);
 }
 activate("s1");
 state.activeQ = "q2";

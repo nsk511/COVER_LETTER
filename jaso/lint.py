@@ -127,7 +127,8 @@ def check_subtitle(answer: Answer, question: Question, company: CompanyProfile,
     result_markers = ["줄", "단축", "개선", "높", "낮", "확보", "해결", "만들", "없앤",
                       "0건", "%", "배", "시간", "달성", "이끈", "바꾼"]
     method_markers = ["로", "으로", "통해", "한", "하여", "써서", "재설계", "표준화", "분석"]
-    has_result = bool(contains_any(subtitle, result_markers))
+    # 수치가 들어 있으면 그 자체가 결과다 ('특급전사 3회', '90분→20분')
+    has_result = bool(contains_any(subtitle, result_markers)) or bool(extract_numbers(subtitle))
     has_method = bool(contains_any(subtitle, method_markers))
 
     formula_types = {"achievement", "challenge", "collaboration", "strength", "strength_weakness"}
