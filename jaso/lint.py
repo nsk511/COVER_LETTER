@@ -453,6 +453,34 @@ def lint_answer(answer: Answer, question: Question, note: CareerNote,
     check_evidence_links(answer, question, note, report)
 
 
+def check_duplicate_use(draft, note: CareerNote, company: CompanyProfile,
+                        report: LintReport) -> None:
+    """같은 경험을 두 문항 이상에서 쓰고 있는지.
+
+    자소서 전체가 한 경험에 기대면 '이야깃거리가 하나뿐'으로 읽힌다.
+    문항마다 다른 경험을 쓰는 것이 원칙이다.
+    """
+    where: dict[str, list[str]] = {}
+    for question in company.questions:
+        answer = draft.answer(question.id)
+        if answer is None or not answer.body:
+            continue
+        for exp_id in answer.used:
+            where.setdefault(exp_id, []).append(question.id)
+
+    for exp_id, questions in where.items():
+        if len(questions) < 2:
+            continue
+        exp = note.by_id(exp_id)
+        label = exp.label() if exp else exp_id
+        for question_id in questions:
+            report.add(Finding(
+                "DUP", WARN, question_id,
+                f"같은 경험을 {len(questions)}개 문항({', '.join(questions)})에서 쓰고 있습니다: {label}",
+                hint="문항마다 다른 경험을 쓰는 것이 원칙입니다. 한쪽을 다른 경험으로 바꾸세요",
+            ))
+
+
 def lint_draft(draft, note: CareerNote, company: CompanyProfile) -> LintReport:
     report = LintReport()
     answered = {a.id for a in draft.answers}
@@ -467,6 +495,8 @@ def lint_draft(draft, note: CareerNote, company: CompanyProfile) -> LintReport:
             ))
             continue
         lint_answer(answer, question, note, company, report)
+
+    check_duplicate_use(draft, note, company, report)
 
     for extra_id in answered - {q.id for q in company.questions}:
         report.add(Finding(

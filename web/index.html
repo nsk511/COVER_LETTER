@@ -1057,6 +1057,25 @@ function lintAnswer(question, answer, career, company) {
 
 function lintAll(career, company, draft) {
   const findings = [];
+
+  /* 같은 경험을 두 문항 이상에서 쓰면 '이야깃거리가 하나뿐'으로 읽힌다 */
+  const where = {};
+  for (const q of company.questions || []) {
+    const a = draft[q.id];
+    if (!a || !(a.body || "").trim()) continue;
+    for (const id of a.used || []) (where[id] = where[id] || []).push(q.id);
+  }
+  for (const [expId, qids] of Object.entries(where)) {
+    if (qids.length < 2) continue;
+    const exp = (career.experiences || []).find((e) => e.id === expId);
+    const label = exp ? (exp.title || exp.id) : expId;
+    for (const qid of qids) {
+      findings.push({ rule: "DUP", level: "WARN", qid,
+        message: "같은 경험을 " + qids.length + "개 문항(" + qids.join(", ") + ")에서 쓰고 있습니다: " + label,
+        fix: "문항마다 다른 경험을 쓰는 것이 원칙입니다. 한쪽을 다른 경험으로 바꾸세요", ev: "" });
+    }
+  }
+
   for (const q of company.questions || []) {
     const a = draft[q.id];
     if (!a || !(a.body || "").trim()) {
