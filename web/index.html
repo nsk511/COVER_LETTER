@@ -1794,14 +1794,15 @@ function renderWrite() {
       '<div class="stack">' +
         '<div class="card stack">' +
           '<p class="qtext">' + esc(q.text) + "</p>" +
-          '<label class="field"><span>소제목 <em>[방법] + [결과]</em></span>' +
+          '<label class="field"><span>소제목 <em>[방법] + [결과] · 글자수에 포함됩니다</em></span>' +
           '<input type="text" id="subtitle-input" data-answer="subtitle" value="' + esc(answer.subtitle || "") +
           '" placeholder="예: 집계 단위를 바꿔 산출 시간을 78% 줄였습니다"></label>' +
           '<div id="counter-slot">' + counterHTML(q, answer) + "</div>" +
           '<textarea id="body-input" data-answer="body" rows="18" placeholder="본문을 입력하거나, 아래 버튼으로 초안을 받아 고쳐 쓰세요">' +
           esc(answer.body || "") + "</textarea>" +
           (answer.note ? '<p class="note" style="color:var(--warn)">확인 필요: ' + esc(answer.note) + "</p>" : "") +
-          '<div class="row"><button class="btn primary" data-act="generate" id="gen-btn">Claude로 초안 만들기</button>' +
+          '<div class="row"><button class="btn primary" data-act="copy-answer">소제목+본문 복사</button>' +
+          '<button class="btn" data-act="generate" id="gen-btn">Claude로 초안 만들기</button>' +
           '<button class="btn" data-act="copy-prompt">프롬프트 복사</button>' +
           '<button class="btn quiet" data-act="clear-answer">본문 비우기</button></div>' +
           '<div id="gen-slot"></div>' +
@@ -2132,6 +2133,22 @@ const ACTIONS = {
     state.draft = {};
     state.view = "career";
     markDirty(); render();
+  },
+
+  /* 소제목은 별도 칸에 있지만 글자수에는 포함된다. 제출할 때 함께 붙여넣도록 한 번에 복사한다. */
+  async "copy-answer"() {
+    const answer = state.draft[state.activeQ];
+    if (!answer || !(answer.body || "").trim()) { toast("본문이 비어 있습니다."); return; }
+    const text = (answer.subtitle ? "[" + answer.subtitle + "]\n\n" : "") + answer.body;
+    const chars = countChars(answer.subtitle ? "[" + answer.subtitle + "]\n" + answer.body : answer.body);
+    try {
+      await navigator.clipboard.writeText(text);
+      toast("복사했습니다 — 소제목 포함 " + chars.withSpace + "자");
+    } catch (e) {
+      const box = document.getElementById("gen-slot");
+      box.innerHTML = '<p class="note">복사가 막혀 있습니다. 아래 내용을 직접 선택해 복사하세요.</p>' +
+        '<pre class="script">' + esc(text) + "</pre>";
+    }
   },
 
   async "copy-prompt"() {
